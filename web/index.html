@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vECU Digital Twin</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand-block">
+        <p class="brand">vECU Twin</p>
+        <p class="brand-sub">Local SOME/IP digital twin</p>
+      </div>
+      <div class="topbar-meta">
+        <p id="connectionState" class="connection" data-state="connecting">Connecting</p>
+        <p id="alertBanner" class="alert-banner" hidden></p>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar" aria-label="Navigation and controls">
+        <nav class="side-nav">
+          <button type="button" class="nav-item is-active" data-panel="overview">Overview</button>
+          <button type="button" class="nav-item" data-panel="controls">Controls</button>
+          <button type="button" class="nav-item" data-panel="diagnostics">Diagnostics</button>
+        </nav>
+
+        <section class="side-panel" data-panel-section="overview">
+          <h2>Live link</h2>
+          <p class="side-copy">Hardware metrics sampled inside the vECU Linux view and published over SOME/IP.</p>
+          <dl class="meta-list">
+            <div><dt>Sequence</dt><dd id="sequenceValue">—</dd></div>
+            <div><dt>Timestamp</dt><dd id="timestampValue">—</dd></div>
+            <div><dt>Gap warnings</dt><dd id="gapWarningsValue">0</dd></div>
+            <div><dt>Logical CPUs</dt><dd id="cpuCountValue">—</dd></div>
+          </dl>
+        </section>
+
+        <section class="side-panel" data-panel-section="controls" hidden>
+          <h2>Method requests</h2>
+          <p class="side-copy">Commands travel browser → WebSocket → SOME/IP methods on the publisher.</p>
+          <label class="field">
+            <span>Publish interval (ms)</span>
+            <div class="field-row">
+              <input id="intervalInput" type="number" min="50" max="10000" step="50" value="500" />
+              <button type="button" id="applyIntervalBtn" class="btn">Apply</button>
+            </div>
+          </label>
+          <button type="button" id="resetSequenceBtn" class="btn btn-secondary">Reset sequence</button>
+          <button type="button" id="pauseStreamBtn" class="btn btn-danger">Simulate fault (pause stream)</button>
+          <button type="button" id="resumeStreamBtn" class="btn btn-secondary">Resume stream</button>
+        </section>
+
+        <section class="side-panel" data-panel-section="diagnostics" hidden>
+          <h2>Thresholds</h2>
+          <ul class="threshold-list">
+            <li>CPU ≥ 85% → alert</li>
+            <li>Memory ≥ 90% → alert</li>
+            <li>Temperature ≥ 80°C → alert</li>
+            <li>Load ≈ CPU count → alert</li>
+            <li>No frames for &gt; 2 s → stream timeout</li>
+          </ul>
+          <p class="side-copy">Temperature needs a kernel thermal zone or hwmon sensor. Docker Desktop on Windows often hides those — other metrics still come from real `/proc` data.</p>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="metric-grid" aria-label="Hardware telemetry">
+          <article class="metric" id="cpuCard" data-metric="cpu">
+            <header class="metric-head">
+              <h2>CPU utilisation</h2>
+              <p id="cpuState" class="pill" data-level="ok">nominal</p>
+            </header>
+            <p class="metric-value"><span id="cpuValue">—</span><span class="unit">%</span></p>
+            <div class="meter" aria-hidden="true"><div id="cpuFill" class="fill"></div></div>
+            <svg id="cpuSpark" class="spark" viewBox="0 0 280 64" role="img" aria-label="CPU history"></svg>
+          </article>
+
+          <article class="metric" id="memoryCard" data-metric="memory">
+            <header class="metric-head">
+              <h2>Memory used</h2>
+              <p id="memoryState" class="pill" data-level="ok">nominal</p>
+            </header>
+            <p class="metric-value"><span id="memoryValue">—</span><span class="unit">%</span></p>
+            <div class="meter" aria-hidden="true"><div id="memoryFill" class="fill"></div></div>
+            <svg id="memorySpark" class="spark" viewBox="0 0 280 64" role="img" aria-label="Memory history"></svg>
+          </article>
+
+          <article class="metric" id="temperatureCard" data-metric="temperature">
+            <header class="metric-head">
+              <h2>Core temperature</h2>
+              <p id="temperatureState" class="pill" data-level="ok">nominal</p>
+            </header>
+            <p class="metric-value"><span id="temperatureValue">—</span><span class="unit">°C</span></p>
+            <div class="meter" aria-hidden="true"><div id="temperatureFill" class="fill"></div></div>
+            <p id="temperatureNote" class="metric-note">Waiting for thermal zone…</p>
+          </article>
+
+          <article class="metric" id="loadCard" data-metric="load">
+            <header class="metric-head">
+              <h2>Load average (1m)</h2>
+              <p id="loadState" class="pill" data-level="ok">nominal</p>
+            </header>
+            <p class="metric-value"><span id="loadValue">—</span></p>
+            <p class="metric-note">Across <span id="loadCpuHint">—</span> logical CPUs</p>
+          </article>
+
+          <article class="metric" id="swapCard" data-metric="swap">
+            <header class="metric-head">
+              <h2>Swap used</h2>
+              <p id="swapState" class="pill" data-level="ok">nominal</p>
+            </header>
+            <p class="metric-value"><span id="swapValue">—</span><span class="unit">%</span></p>
+            <div class="meter" aria-hidden="true"><div id="swapFill" class="fill"></div></div>
+          </article>
+
+          <article class="metric" id="networkCard" data-metric="network">
+            <header class="metric-head">
+              <h2>Network I/O</h2>
+              <p class="pill" data-level="ok">live</p>
+            </header>
+            <p class="metric-value compact"><span id="rxValue">—</span><span class="unit">↓</span></p>
+            <p class="metric-value compact"><span id="txValue">—</span><span class="unit">↑</span></p>
+            <p class="metric-note"><span id="processCountValue">—</span> processes</p>
+          </article>
+        </section>
+
+        <section class="feed-panel" aria-label="Event feed">
+          <div class="feed-head">
+            <h2>Event feed</h2>
+            <p id="feedHint" class="feed-hint">Live frames and control acknowledgements</p>
+          </div>
+          <ul id="eventList" class="event-list"></ul>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+services:
+  digital-twin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sdv-digital-twin:latest
+    container_name: sdv-digital-twin
+    ports:
+      - "8080:8080"
+    environment:
+      VSOMEIP_CONFIGURATION: /workspace/config/vsomeipLocal.json
+      DIGITAL_TWIN_WEB_ROOT: /twin/web
+    stdin_open: true
+    tty: true
